@@ -10,10 +10,14 @@ declare global {
   }
 }
 
+const DEFAULT_LINE_URL = "https://lin.ee/xVg7pXJ";
+
 export default function LeadForm() {
   const [hasLoan, setHasLoan] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [lineUrl, setLineUrl] = useState(DEFAULT_LINE_URL);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,7 +27,7 @@ export default function LeadForm() {
     const data = Object.fromEntries(formData.entries());
 
     setLoading(true);
-    setMessage("");
+    setErrorMessage("");
 
     try {
       const response = await fetch("/api/lead", {
@@ -48,17 +52,58 @@ export default function LeadForm() {
         amount: data.amount,
       });
 
-      setMessage("資料已送出，正在前往官方 LINE…");
+      if (typeof result.lineUrl === "string" && result.lineUrl) {
+        setLineUrl(result.lineUrl);
+      }
 
-      setTimeout(() => {
-        window.location.href = result.lineUrl;
-      }, 800);
+      setSuccess(true);
+      form.reset();
+      setHasLoan("");
     } catch (error) {
-      setMessage(
+      setErrorMessage(
         error instanceof Error ? error.message : "送出失敗，請稍後再試",
       );
+    } finally {
       setLoading(false);
     }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-6 text-center md:p-8">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-3xl font-black text-white">
+          ✓
+        </div>
+
+        <h3 className="mt-5 text-2xl font-black text-slate-900">
+          資料已成功送出
+        </h3>
+
+        <p className="mt-3 leading-7 text-slate-600">
+          感謝您的填寫，服務人員將於營業時間內盡快與您聯繫。
+        </p>
+
+        <a
+          href={lineUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 flex w-full items-center justify-center rounded-xl bg-[#06C755] px-5 py-4 text-lg font-black text-white transition hover:bg-[#05b84e]"
+        >
+          加入 LINE 繼續諮詢
+        </a>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSuccess(false);
+            setErrorMessage("");
+          }}
+          className="mt-4 text-sm font-semibold text-slate-500 underline hover:text-slate-800"
+        >
+          重新填寫資料
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -165,9 +210,7 @@ export default function LeadForm() {
       </div>
 
       <div className="md:col-span-2">
-        <label className="mb-2 block font-bold">
-          名下是否已有貸款 *
-        </label>
+        <label className="mb-2 block font-bold">名下是否已有貸款 *</label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 p-3">
@@ -281,16 +324,12 @@ export default function LeadForm() {
         disabled={loading}
         className="w-full rounded-xl bg-blue-600 px-5 py-4 text-lg font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
       >
-        {loading ? "資料送出中…" : "送出資料並前往 LINE"}
+        {loading ? "資料送出中…" : "立即送出"}
       </button>
 
-      {message && (
-        <p
-          className={`text-center text-sm font-medium md:col-span-2 ${
-            message.includes("失敗") ? "text-red-600" : "text-green-700"
-          }`}
-        >
-          {message}
+      {errorMessage && (
+        <p className="text-center text-sm font-medium text-red-600 md:col-span-2">
+          {errorMessage}
         </p>
       )}
 
