@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
     const telegramChatId = process.env.TELEGRAM_CHAT_ID;
     const lineUrl =
-      process.env.NEXT_PUBLIC_LINE_URL?? "https://lin.ee/xVg7pXJ";
+      process.env.NEXT_PUBLIC_LINE_URL ?? "https://lin.ee/xVg7pXJ";
 
     if (!telegramToken || !telegramChatId) {
       return NextResponse.json(
