@@ -48,60 +48,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-    const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+    const googleSheetsWebhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
     const lineUrl =
       process.env.NEXT_PUBLIC_LINE_URL ?? "https://lin.ee/xVg7pXJ";
 
-    if (!telegramToken || !telegramChatId) {
+    if (!googleSheetsWebhookUrl) {
       return NextResponse.json(
-        { error: "Telegram 尚未完成設定" },
+        { error: "Google 試算表尚未完成設定" },
         { status: 500 },
       );
     }
 
-    const message = [
-      "📩 新的網站諮詢",
-      "",
-      `姓名：${clean(body.name)}`,
-      `電話：${phone}`,
-      `居住地：${clean(body.residence)}`,
-      `職業：${clean(body.occupation)}`,
-      `月收入：${clean(body.income)}`,
-      `需求金額：${clean(body.amount)}`,
-      `名下貸款：${clean(body.hasLoan)}`,
-      body.hasLoan === "有"
-        ? `每月繳款：${clean(body.monthlyPayment)}`
-        : "",
-      body.hasLoan === "有"
-        ? `呆帳／遲繳：${clean(body.paymentStatus)}`
-        : "",
-      `資金用途：${clean(body.purpose)}`,
-      "",
-      `時間：${new Date().toLocaleString("zh-TW", {
-        timeZone: "Asia/Taipei",
-      })}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const telegramResponse = await fetch(
-      `https://api.telegram.org/bot${telegramToken}/sendMessage`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: telegramChatId,
-          text: message,
-        }),
+    const googleSheetsResponse = await fetch(googleSheetsWebhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        name: clean(body.name),
+        phone,
+        residence: clean(body.residence),
+        occupation: clean(body.occupation),
+        income: clean(body.income),
+        amount: clean(body.amount),
+        hasLoan: clean(body.hasLoan),
+        monthlyPayment:
+          body.hasLoan === "有" ? clean(body.monthlyPayment) : "",
+        loanStatus: body.hasLoan === "有" ? clean(body.paymentStatus) : "",
+        purpose: clean(body.purpose),
+        consent: clean(body.consent),
+      }),
+    });
 
-    if (!telegramResponse.ok) {
+    if (!googleSheetsResponse.ok) {
       return NextResponse.json(
-        { error: "Telegram 通知失敗，請檢查 Bot Token 與 Chat ID" },
+        { error: "資料寫入失敗，請稍後再試" },
         { status: 502 },
       );
     }

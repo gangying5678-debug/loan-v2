@@ -45,6 +45,10 @@ export default function LeadForm() {
       }
 
       window.fbq?.("track", "Lead");
+      window.gtag?.("event", "generate_lead", {
+        residence: data.residence,
+        amount: data.amount,
+      });
 
       window.dataLayer?.push({
         event: "generate_lead",
