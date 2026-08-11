@@ -53,6 +53,9 @@ export default function PrivacyPage() {
             <p className="mt-3 leading-7 text-slate-600">
               當您送出表單時，本網站會蒐集您填寫的姓名、手機號碼、居住地、職業、月收入區間、需求金額、現有貸款狀況、每月繳款金額、呆帳或遲繳狀況、資金用途，以及您的個資使用同意。
             </p>
+            <p className="mt-3 leading-7 text-slate-600">
+              若您透過含有廣告或活動追蹤參數的連結進入本網站，我們也可能記錄 UTM 參數、Meta 或 Google 廣告點擊識別碼、進入頁面網址與來源頁面，用於了解諮詢來源與廣告成效。本網站不會因此蒐集密碼、Cookie 內容或 Authorization header。
+            </p>
           </section>
 
           <section aria-labelledby="collection-purpose">
@@ -73,6 +76,9 @@ export default function PrivacyPage() {
             </h2>
             <p className="mt-3 leading-7 text-slate-600">
               您送出的表單資料可能透過伺服器端傳送並儲存於 Google Sheets，作為諮詢聯絡與處理記錄。我們會依實際業務需要處理這些資料。
+            </p>
+            <p className="mt-3 leading-7 text-slate-600">
+              為了在同一次瀏覽期間保留進站來源，本網站會使用瀏覽器 sessionStorage 儲存本次 session 的來源追蹤資料，不會讀取或傳送其他瀏覽器儲存內容。
             </p>
           </section>
 
@@ -109,4 +115,3 @@ export default function PrivacyPage() {
     </main>
   );
 }
-

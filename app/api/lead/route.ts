@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { LINE_URL } from "../../lib/site";
 
-const MAX_BODY_BYTES = 4_096;
+const MAX_BODY_BYTES = 12_288;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 const WEBHOOK_TIMEOUT_MS = 10_000;
@@ -22,6 +22,15 @@ const allowedFields = new Set([
   "purpose",
   "consent",
   "website",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  "fbclid",
+  "gclid",
+  "landing_page",
+  "referrer",
 ]);
 
 const residences = new Set(["台南市", "高雄市", "屏東縣"]);
@@ -86,6 +95,15 @@ type LeadPayload = {
   loanStatus: string;
   purpose: string;
   consent: "同意";
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_content: string;
+  utm_term: string;
+  fbclid: string;
+  gclid: string;
+  landing_page: string;
+  referrer: string;
 };
 
 function errorResponse(error: string, status: number, headers?: HeadersInit) {
@@ -171,6 +189,68 @@ function readOption(
   return value;
 }
 
+function readOptionalString(
+  body: Record<string, unknown>,
+  field: string,
+  label: string,
+  maxLength: number,
+) {
+  const rawValue = body[field];
+
+  if (rawValue === undefined) {
+    return "";
+  }
+
+  if (typeof rawValue !== "string") {
+    throw new Error(`${label}格式不正確`);
+  }
+
+  const value = rawValue.trim();
+
+  if (value.length > maxLength) {
+    throw new Error(`${label}長度超過限制`);
+  }
+
+  if (CONTROL_CHARACTERS.test(value) || FORMULA_PREFIX.test(value)) {
+    throw new Error(`${label}包含無效字元`);
+  }
+
+  return value;
+}
+
+function readClickId(body: Record<string, unknown>, field: string) {
+  const value = readOptionalString(body, field, field, 500);
+
+  if (value && !/^[A-Za-z0-9._-]+$/.test(value)) {
+    throw new Error(`${field}格式不正確`);
+  }
+
+  return value;
+}
+
+function readOptionalUrl(
+  body: Record<string, unknown>,
+  field: string,
+  label: string,
+) {
+  const value = readOptionalString(body, field, label, 1_000);
+
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error();
+    }
+  } catch {
+    throw new Error(`${label}格式不正確`);
+  }
+
+  return value;
+}
+
 function validatePayload(body: unknown): LeadPayload {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new Error("請求資料格式不正確");
@@ -217,6 +297,29 @@ function validatePayload(body: unknown): LeadPayload {
   ) as LeadPayload["hasLoan"];
   const purpose = readOption(data, "purpose", "資金用途", purposes);
   const consent = readString(data, "consent", "個資使用同意", 2);
+  const utm_source = readOptionalString(data, "utm_source", "UTM source", 300);
+  const utm_medium = readOptionalString(data, "utm_medium", "UTM medium", 300);
+  const utm_campaign = readOptionalString(
+    data,
+    "utm_campaign",
+    "UTM campaign",
+    300,
+  );
+  const utm_content = readOptionalString(
+    data,
+    "utm_content",
+    "UTM content",
+    300,
+  );
+  const utm_term = readOptionalString(data, "utm_term", "UTM term", 300);
+  const fbclid = readClickId(data, "fbclid");
+  const gclid = readClickId(data, "gclid");
+  const landing_page = readOptionalUrl(
+    data,
+    "landing_page",
+    "Landing page",
+  );
+  const referrer = readOptionalUrl(data, "referrer", "Referrer");
 
   if (consent !== "同意") {
     throw new Error("請同意個人資料使用說明");
@@ -260,6 +363,15 @@ function validatePayload(body: unknown): LeadPayload {
     loanStatus,
     purpose,
     consent,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    utm_content,
+    utm_term,
+    fbclid,
+    gclid,
+    landing_page,
+    referrer,
   };
 }
 

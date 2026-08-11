@@ -1,6 +1,10 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import {
+  getSessionAttribution,
+  type AttributionData,
+} from "../lib/attribution";
 import { LINE_URL } from "../lib/site";
 
 declare global {
@@ -95,6 +99,11 @@ export default function LeadForm() {
   const [lineUrl, setLineUrl] = useState(LINE_URL);
   const submittingRef = useRef(false);
   const conversionTrackedRef = useRef(false);
+  const attributionRef = useRef<AttributionData | null>(null);
+
+  useEffect(() => {
+    attributionRef.current = getSessionAttribution();
+  }, []);
 
   function clearFieldError(field: FieldName) {
     setErrorMessage("");
@@ -144,7 +153,10 @@ export default function LeadForm() {
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
+    const data: Record<string, FormDataEntryValue | string> = {
+      ...Object.fromEntries(formData.entries()),
+      ...(attributionRef.current ?? getSessionAttribution()),
+    };
     const validationErrors = validateForm(formData);
 
     if (Object.keys(validationErrors).length > 0) {

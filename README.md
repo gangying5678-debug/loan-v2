@@ -33,7 +33,7 @@ npm run dev
 
 ## Google Sheets Webhook
 
-`/api/lead` 會先執行伺服器端驗證，通過後才將以下 11 個 JSON 欄位 POST 至 `GOOGLE_SHEETS_WEBHOOK_URL`：
+`/api/lead` 會先執行伺服器端驗證，通過後才將 JSON POST 至 `GOOGLE_SHEETS_WEBHOOK_URL`。原有 11 個表單欄位順序維持不變：
 
 ```text
 name
@@ -48,6 +48,26 @@ loanStatus
 purpose
 consent
 ```
+
+第 11 欄之後依序追加以下來源追蹤欄位：
+
+```text
+utm_source
+utm_medium
+utm_campaign
+utm_content
+utm_term
+fbclid
+gclid
+landing_page
+referrer
+```
+
+## 廣告來源追蹤
+
+首頁會讀取網址上的 UTM 參數、`fbclid` 與 `gclid`，並在當前分頁 session 中保留首次有效值。後續網址沒有追蹤參數時，不會覆蓋已儲存的來源。
+
+`landing_page` 只保留頁面網址與允許的追蹤參數；`referrer` 會移除 query string 與 hash。專案不會蒐集 Cookie、Authorization header、密碼或其他瀏覽器儲存內容。提交時間應繼續由 Google Apps Script 在寫入時產生，不接受使用者輸入時間。
 
 Webhook 回傳非 2xx、網路失敗或逾時時，API 會回傳失敗，前端不會顯示成功或觸發 Lead 轉換事件。
 
