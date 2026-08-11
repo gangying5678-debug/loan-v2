@@ -17,6 +17,7 @@ const allowedFields = new Set([
   "amount",
   "hasLoan",
   "monthlyPayment",
+  "loanStatus",
   "paymentStatus",
   "purpose",
   "consent",
@@ -181,6 +182,10 @@ function validatePayload(body: unknown): LeadPayload {
     throw new Error("請求包含未支援的欄位");
   }
 
+  if (data.loanStatus !== undefined && data.paymentStatus !== undefined) {
+    throw new Error("貸款狀態欄位重複");
+  }
+
   if (
     data.website !== undefined &&
     (typeof data.website !== "string" || data.website.trim() !== "")
@@ -227,14 +232,17 @@ function validatePayload(body: unknown): LeadPayload {
       "每月貸款繳款金額",
       monthlyPayments,
     );
+    const loanStatusField =
+      data.loanStatus !== undefined ? "loanStatus" : "paymentStatus";
     loanStatus = readOption(
       data,
-      "paymentStatus",
+      loanStatusField,
       "呆帳或遲繳狀況",
       paymentStatuses,
     );
   } else if (
     (data.monthlyPayment !== undefined && data.monthlyPayment !== "") ||
+    (data.loanStatus !== undefined && data.loanStatus !== "") ||
     (data.paymentStatus !== undefined && data.paymentStatus !== "")
   ) {
     throw new Error("貸款資料與貸款狀態不一致");
@@ -298,11 +306,10 @@ export async function POST(request: Request) {
   }
 
   const googleSheetsWebhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
-  const lineUrl =
-    process.env.NEXT_PUBLIC_LINE_URL ?? LINE_URL;
+  const lineUrl = LINE_URL;
 
   if (!googleSheetsWebhookUrl) {
-    return errorResponse("伺服器尚未完成設定", 500);
+    return errorResponse("目前無法送出資料，請稍後再試", 500);
   }
 
   try {

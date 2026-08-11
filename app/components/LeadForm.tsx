@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { LINE_URL } from "../lib/site";
 
 declare global {
@@ -10,16 +10,152 @@ declare global {
   }
 }
 
+type FieldName =
+  | "name"
+  | "phone"
+  | "residence"
+  | "occupation"
+  | "income"
+  | "amount"
+  | "hasLoan"
+  | "monthlyPayment"
+  | "loanStatus"
+  | "purpose"
+  | "consent";
+
+type FieldErrors = Partial<Record<FieldName, string>>;
+
+class SubmissionError extends Error {}
+
+function getValue(formData: FormData, field: FieldName) {
+  const value = formData.get(field);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function validateForm(formData: FormData): FieldErrors {
+  const errors: FieldErrors = {};
+  const requiredFields: Array<[FieldName, string]> = [
+    ["name", "請輸入姓名"],
+    ["phone", "請輸入手機號碼"],
+    ["residence", "請選擇居住地"],
+    ["occupation", "請選擇職業"],
+    ["income", "請選擇月收入"],
+    ["amount", "請選擇需求金額"],
+    ["hasLoan", "請選擇目前是否有貸款"],
+    ["purpose", "請選擇資金用途"],
+    ["consent", "請閱讀並同意個人資料使用說明"],
+  ];
+
+  for (const [field, message] of requiredFields) {
+    if (!getValue(formData, field)) {
+      errors[field] = message;
+    }
+  }
+
+  const name = getValue(formData, "name");
+  if (name && name.length > 30) {
+    errors.name = "姓名不得超過 30 個字";
+  }
+
+  const phone = getValue(formData, "phone");
+  if (phone && !/^09\d{8}$/.test(phone)) {
+    errors.phone = "請輸入 09 開頭的 10 碼手機號碼";
+  }
+
+  if (getValue(formData, "hasLoan") === "有") {
+    if (!getValue(formData, "monthlyPayment")) {
+      errors.monthlyPayment = "請選擇每月貸款繳款金額";
+    }
+    if (!getValue(formData, "loanStatus")) {
+      errors.loanStatus = "請選擇是否有遲繳或呆帳";
+    }
+  }
+
+  return errors;
+}
+
+function getSubmissionError(status: number, serverMessage?: string) {
+  if (status === 429) {
+    return "送出次數過於頻繁，請稍後再試。";
+  }
+
+  if (status === 400 && serverMessage) {
+    return serverMessage;
+  }
+
+  return "目前無法送出資料，請稍後再試。";
+}
+
 export default function LeadForm() {
   const [hasLoan, setHasLoan] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState(false);
   const [lineUrl, setLineUrl] = useState(LINE_URL);
   const submittingRef = useRef(false);
+  const conversionTrackedRef = useRef(false);
+
+  function clearFieldError(field: FieldName) {
+    setErrorMessage("");
+    setFieldErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function fieldAccessibility(field: FieldName) {
+    return {
+      "aria-invalid": fieldErrors[field] ? true : undefined,
+      "aria-describedby": fieldErrors[field] ? `${field}-error` : undefined,
+    };
+  }
+
+  function handleLoanChange(event: ChangeEvent<HTMLInputElement>) {
+    const value = event.currentTarget.value;
+    const form = event.currentTarget.form;
+
+    setHasLoan(value);
+    clearFieldError("hasLoan");
+
+    if (value === "沒有") {
+      const monthlyPayment = form?.elements.namedItem("monthlyPayment");
+      const loanStatus = form?.elements.namedItem("loanStatus");
+
+      if (monthlyPayment instanceof HTMLSelectElement) {
+        monthlyPayment.value = "";
+      }
+      if (loanStatus instanceof HTMLSelectElement) {
+        loanStatus.value = "";
+      }
+
+      clearFieldError("monthlyPayment");
+      clearFieldError("loanStatus");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    const validationErrors = validateForm(formData);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      setErrorMessage("請檢查標示的必填欄位。");
+      const firstInvalidField = Object.keys(validationErrors)[0];
+      form
+        .querySelector<HTMLElement>(`[name="${firstInvalidField}"]`)
+        ?.focus();
+      return;
+    }
 
     if (submittingRef.current) {
       return;
@@ -27,12 +163,9 @@ export default function LeadForm() {
 
     submittingRef.current = true;
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-
     setLoading(true);
     setErrorMessage("");
+    setFieldErrors({});
 
     try {
       const response = await fetch("/api/lead", {
@@ -43,17 +176,26 @@ export default function LeadForm() {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        lineUrl?: unknown;
+      };
 
       if (!response.ok || result.ok !== true) {
-        throw new Error(result.error || "資料送出失敗");
+        throw new SubmissionError(
+          getSubmissionError(response.status, result.error),
+        );
       }
 
-      window.fbq?.("track", "Lead");
-      window.gtag?.("event", "generate_lead", {
-        residence: data.residence,
-        amount: data.amount,
-      });
+      if (!conversionTrackedRef.current) {
+        conversionTrackedRef.current = true;
+        window.fbq?.("track", "Lead");
+        window.gtag?.("event", "generate_lead", {
+          residence: data.residence,
+          amount: data.amount,
+        });
+      }
 
       if (typeof result.lineUrl === "string" && result.lineUrl) {
         setLineUrl(result.lineUrl);
@@ -62,10 +204,13 @@ export default function LeadForm() {
       setSuccess(true);
       form.reset();
       setHasLoan("");
+      setFieldErrors({});
     } catch (error) {
       submittingRef.current = false;
       setErrorMessage(
-        error instanceof Error ? error.message : "送出失敗，請稍後再試",
+        error instanceof SubmissionError
+          ? error.message
+          : "目前無法送出資料，請稍後再試。",
       );
     } finally {
       setLoading(false);
@@ -105,7 +250,9 @@ export default function LeadForm() {
           onClick={() => {
             setSuccess(false);
             setErrorMessage("");
+            setFieldErrors({});
             submittingRef.current = false;
+            conversionTrackedRef.current = false;
           }}
           className="mt-4 text-sm font-semibold text-slate-500 underline hover:text-slate-800"
         >
@@ -118,6 +265,7 @@ export default function LeadForm() {
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       aria-describedby={errorMessage ? "form-error" : undefined}
       className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2"
     >
@@ -135,6 +283,13 @@ export default function LeadForm() {
         />
       </div>
 
+      <p className="text-sm text-slate-500 md:col-span-2">
+        <span className="font-bold text-red-600" aria-hidden="true">
+          *
+        </span>{" "}
+        為必填欄位
+      </p>
+
       <div>
         <label htmlFor="name" className="mb-1 block font-bold">
           姓名 *
@@ -146,8 +301,11 @@ export default function LeadForm() {
           required
           maxLength={30}
           placeholder="請輸入姓名"
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+          {...fieldAccessibility("name")}
+          onChange={() => clearFieldError("name")}
+          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
         />
+        <FieldError field="name" message={fieldErrors.name} />
       </div>
 
       <div>
@@ -162,8 +320,12 @@ export default function LeadForm() {
           inputMode="tel"
           pattern="09[0-9]{8}"
           placeholder="例如 0912345678"
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+          autoComplete="tel"
+          {...fieldAccessibility("phone")}
+          onChange={() => clearFieldError("phone")}
+          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
         />
+        <FieldError field="phone" message={fieldErrors.phone} />
       </div>
 
       <div>
@@ -175,7 +337,9 @@ export default function LeadForm() {
           name="residence"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+          {...fieldAccessibility("residence")}
+          onChange={() => clearFieldError("residence")}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
         >
           <option value="" disabled>
             請選擇
@@ -184,6 +348,7 @@ export default function LeadForm() {
           <option value="高雄市">高雄市</option>
           <option value="屏東縣">屏東縣</option>
         </select>
+        <FieldError field="residence" message={fieldErrors.residence} />
       </div>
 
       <div>
@@ -195,7 +360,9 @@ export default function LeadForm() {
           name="occupation"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+          {...fieldAccessibility("occupation")}
+          onChange={() => clearFieldError("occupation")}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
         >
           <option value="" disabled>
             請選擇
@@ -209,6 +376,7 @@ export default function LeadForm() {
           <option>自由工作者</option>
           <option>其他</option>
         </select>
+        <FieldError field="occupation" message={fieldErrors.occupation} />
       </div>
 
       <div>
@@ -220,7 +388,9 @@ export default function LeadForm() {
           name="income"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+          {...fieldAccessibility("income")}
+          onChange={() => clearFieldError("income")}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
         >
           <option value="" disabled>
             請選擇
@@ -231,6 +401,7 @@ export default function LeadForm() {
           <option>80,001～120,000 元</option>
           <option>120,001 元以上</option>
         </select>
+        <FieldError field="income" message={fieldErrors.income} />
       </div>
 
       <div>
@@ -242,7 +413,9 @@ export default function LeadForm() {
           name="amount"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+          {...fieldAccessibility("amount")}
+          onChange={() => clearFieldError("amount")}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
         >
           <option value="" disabled>
             請選擇
@@ -252,6 +425,7 @@ export default function LeadForm() {
           <option>150,000 元內</option>
           <option>200,000 元內</option>
         </select>
+        <FieldError field="amount" message={fieldErrors.amount} />
       </div>
 
       <fieldset className="md:col-span-2">
@@ -266,7 +440,8 @@ export default function LeadForm() {
               name="hasLoan"
               value="沒有"
               required
-              onChange={() => setHasLoan("沒有")}
+              {...fieldAccessibility("hasLoan")}
+              onChange={handleLoanChange}
             />
             沒有
           </label>
@@ -277,11 +452,13 @@ export default function LeadForm() {
               name="hasLoan"
               value="有"
               required
-              onChange={() => setHasLoan("有")}
+              {...fieldAccessibility("hasLoan")}
+              onChange={handleLoanChange}
             />
             有
           </label>
         </div>
+        <FieldError field="hasLoan" message={fieldErrors.hasLoan} />
       </fieldset>
 
       {hasLoan === "有" && (
@@ -296,7 +473,9 @@ export default function LeadForm() {
               name="monthlyPayment"
               required
               defaultValue=""
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+              {...fieldAccessibility("monthlyPayment")}
+              onChange={() => clearFieldError("monthlyPayment")}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
             >
               <option value="" disabled>
                 請選擇
@@ -307,19 +486,25 @@ export default function LeadForm() {
               <option>20,001～30,000 元</option>
               <option>30,001 元以上</option>
             </select>
+            <FieldError
+              field="monthlyPayment"
+              message={fieldErrors.monthlyPayment}
+            />
           </div>
 
           <div>
-            <label htmlFor="paymentStatus" className="mb-1 block font-bold">
+            <label htmlFor="loanStatus" className="mb-1 block font-bold">
               目前是否有呆帳或遲繳 *
             </label>
 
             <select
-              id="paymentStatus"
-              name="paymentStatus"
+              id="loanStatus"
+              name="loanStatus"
               required
               defaultValue=""
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+              {...fieldAccessibility("loanStatus")}
+              onChange={() => clearFieldError("loanStatus")}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
             >
               <option value="" disabled>
                 請選擇
@@ -329,6 +514,10 @@ export default function LeadForm() {
               <option>有呆帳</option>
               <option>不確定</option>
             </select>
+            <FieldError
+              field="loanStatus"
+              message={fieldErrors.loanStatus}
+            />
           </div>
         </div>
       )}
@@ -343,7 +532,9 @@ export default function LeadForm() {
           name="purpose"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+          {...fieldAccessibility("purpose")}
+          onChange={() => clearFieldError("purpose")}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
         >
           <option value="" disabled>
             請選擇
@@ -355,40 +546,57 @@ export default function LeadForm() {
           <option>醫療支出</option>
           <option>其他</option>
         </select>
+        <FieldError field="purpose" message={fieldErrors.purpose} />
       </div>
 
-      <div className="flex items-start gap-2 text-sm text-slate-600 md:col-span-2">
-        <input
-          id="consent"
-          type="checkbox"
-          name="consent"
-          value="同意"
-          required
-          className="mt-1"
-        />
+      <div className="md:col-span-2">
+        <div className="flex items-start gap-2 text-sm text-slate-600">
+          <input
+            id="consent"
+            type="checkbox"
+            name="consent"
+            value="同意"
+            required
+            {...fieldAccessibility("consent")}
+            onChange={() => clearFieldError("consent")}
+            className="mt-1"
+          />
 
-        <span>
-          <label htmlFor="consent">我已閱讀服務說明及</label>
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-blue-700 underline hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            隱私權政策
-          </a>
-          <label htmlFor="consent">
-            ，並同意為回覆本次諮詢而使用我提供的資料。
-          </label>
-        </span>
+          <span>
+            <label htmlFor="consent">我已閱讀服務說明及</label>
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-blue-700 underline hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              隱私權政策
+            </a>
+            <label htmlFor="consent">
+              ，並同意為回覆本次諮詢而使用我提供的資料。
+            </label>
+          </span>
+        </div>
+        <FieldError field="consent" message={fieldErrors.consent} />
       </div>
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-xl bg-blue-600 px-5 py-4 text-lg font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
+        aria-busy={loading}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 text-lg font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
       >
-        {loading ? "資料送出中…" : "立即送出"}
+        {loading ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+            />
+            資料送出中…
+          </>
+        ) : (
+          "立即送出"
+        )}
       </button>
 
       {errorMessage && (
@@ -406,5 +614,26 @@ export default function LeadForm() {
         請勿填寫銀行密碼、信用卡完整卡號或完整身分證資料。
       </p>
     </form>
+  );
+}
+
+function FieldError({
+  field,
+  message,
+}: {
+  field: FieldName;
+  message?: string;
+}) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <p
+      id={`${field}-error`}
+      className="mt-1.5 text-sm font-medium leading-5 text-red-600"
+    >
+      {message}
+    </p>
   );
 }

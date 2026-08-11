@@ -30,7 +30,6 @@ npm run dev
 | `NEXT_PUBLIC_META_PIXEL_ID` | 選用 | Meta Pixel ID，用於 PageView 與 Lead 事件 |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | 選用 | GA4 Measurement ID，用於 `generate_lead` 事件 |
 | `NEXT_PUBLIC_GA4_ID` | 選用 | GA4 Measurement ID 的相容備用名稱 |
-| `NEXT_PUBLIC_LINE_URL` | 選用 | 表單成功後由 API 回傳的 LINE 連結，未設定時使用預設值 |
 
 ## Google Sheets Webhook
 
