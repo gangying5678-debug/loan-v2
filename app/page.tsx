@@ -1,6 +1,5 @@
 import LeadForm from "./components/LeadForm";
-
-const LINE_URL = "https://lin.ee/xVg7pXJ";
+import { LINE_URL } from "./lib/site";
 
 export default function Home() {
   return (
@@ -15,7 +14,7 @@ export default function Home() {
         <div className="absolute right-[35%] top-[-120px] h-[850px] w-px rotate-[28deg] bg-gradient-to-b from-transparent via-blue-300/20 to-transparent" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-5 py-8 sm:px-8 lg:px-12">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-5 pb-28 pt-8 sm:px-8 lg:px-12 lg:py-8">
         <section className="grid flex-1 items-center gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
           {/* 左側 Hero */}
           <div className="mx-auto w-full max-w-xl py-4 lg:py-10">
@@ -87,7 +86,7 @@ export default function Home() {
               href={LINE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-[#06c755] px-6 py-4 text-lg font-black text-white shadow-[0_16px_40px_rgba(6,199,85,0.25)] transition hover:-translate-y-0.5 hover:bg-[#05b94f] sm:w-auto"
+              className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-[#06c755] px-6 py-4 text-lg font-black text-white shadow-[0_16px_40px_rgba(6,199,85,0.25)] transition hover:-translate-y-0.5 hover:bg-[#05b94f] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-2 focus:ring-offset-[#071a3c] sm:w-auto"
             >
               <LineIcon />
               LINE 免費諮詢
@@ -118,10 +117,10 @@ export default function Home() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="LINE 免費諮詢"
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-[#06c755] px-5 py-3 font-bold text-white shadow-2xl transition hover:scale-105 lg:bottom-7 lg:right-7"
+        className="fixed bottom-3 right-3 z-50 flex items-center gap-2 rounded-full bg-[#06c755] p-4 font-bold text-white shadow-2xl transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-2 focus:ring-offset-[#071a3c] min-[360px]:px-5 min-[360px]:py-3 lg:bottom-7 lg:right-7"
       >
         <LineIcon />
-        <span>LINE 免費諮詢</span>
+        <span className="hidden min-[360px]:inline">LINE 免費諮詢</span>
       </a>
     </main>
   );

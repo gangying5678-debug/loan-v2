@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LINE_URL } from "../../lib/site";
 
 const MAX_BODY_BYTES = 4_096;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -19,6 +20,7 @@ const allowedFields = new Set([
   "paymentStatus",
   "purpose",
   "consent",
+  "website",
 ]);
 
 const residences = new Set(["台南市", "高雄市", "屏東縣"]);
@@ -67,6 +69,8 @@ const purposes = new Set([
   "其他",
 ]);
 
+// Vercel serverless instances do not share memory. This only throttles repeated
+// requests that reach the same warm instance; it is a lightweight abuse guard.
 const requestHistory = new Map<string, number[]>();
 
 type LeadPayload = {
@@ -175,6 +179,13 @@ function validatePayload(body: unknown): LeadPayload {
 
   if (Object.keys(data).some((field) => !allowedFields.has(field))) {
     throw new Error("請求包含未支援的欄位");
+  }
+
+  if (
+    data.website !== undefined &&
+    (typeof data.website !== "string" || data.website.trim() !== "")
+  ) {
+    throw new Error("表單資料不正確");
   }
 
   const name = readString(data, "name", "姓名", 30);
@@ -288,7 +299,7 @@ export async function POST(request: Request) {
 
   const googleSheetsWebhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
   const lineUrl =
-    process.env.NEXT_PUBLIC_LINE_URL ?? "https://lin.ee/xVg7pXJ";
+    process.env.NEXT_PUBLIC_LINE_URL ?? LINE_URL;
 
   if (!googleSheetsWebhookUrl) {
     return errorResponse("伺服器尚未完成設定", 500);

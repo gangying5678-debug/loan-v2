@@ -1,26 +1,31 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
+import { LINE_URL } from "../lib/site";
 
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
     gtag?: (...args: unknown[]) => void;
-    dataLayer?: Record<string, unknown>[];
   }
 }
-
-const DEFAULT_LINE_URL = "https://lin.ee/xVg7pXJ";
 
 export default function LeadForm() {
   const [hasLoan, setHasLoan] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [success, setSuccess] = useState(false);
-  const [lineUrl, setLineUrl] = useState(DEFAULT_LINE_URL);
+  const [lineUrl, setLineUrl] = useState(LINE_URL);
+  const submittingRef = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
 
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -40,18 +45,12 @@ export default function LeadForm() {
 
       const result = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || result.ok !== true) {
         throw new Error(result.error || "資料送出失敗");
       }
 
       window.fbq?.("track", "Lead");
       window.gtag?.("event", "generate_lead", {
-        residence: data.residence,
-        amount: data.amount,
-      });
-
-      window.dataLayer?.push({
-        event: "generate_lead",
         residence: data.residence,
         amount: data.amount,
       });
@@ -64,6 +63,7 @@ export default function LeadForm() {
       form.reset();
       setHasLoan("");
     } catch (error) {
+      submittingRef.current = false;
       setErrorMessage(
         error instanceof Error ? error.message : "送出失敗，請稍後再試",
       );
@@ -74,7 +74,11 @@ export default function LeadForm() {
 
   if (success) {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-6 text-center md:p-8">
+      <div
+        role="status"
+        aria-live="polite"
+        className="rounded-2xl border border-green-200 bg-green-50 p-6 text-center md:p-8"
+      >
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-3xl font-black text-white">
           ✓
         </div>
@@ -101,6 +105,7 @@ export default function LeadForm() {
           onClick={() => {
             setSuccess(false);
             setErrorMessage("");
+            submittingRef.current = false;
           }}
           className="mt-4 text-sm font-semibold text-slate-500 underline hover:text-slate-800"
         >
@@ -111,10 +116,31 @@ export default function LeadForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-      <div>
-        <label className="mb-1 block font-bold">姓名 *</label>
+    <form
+      onSubmit={handleSubmit}
+      aria-describedby={errorMessage ? "form-error" : undefined}
+      className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2"
+    >
+      <div
+        aria-hidden="true"
+        className="absolute left-[-10000px] h-px w-px overflow-hidden"
+      >
+        <label htmlFor="website">Website</label>
         <input
+          id="website"
+          type="text"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="name" className="mb-1 block font-bold">
+          姓名 *
+        </label>
+        <input
+          id="name"
           type="text"
           name="name"
           required
@@ -125,8 +151,11 @@ export default function LeadForm() {
       </div>
 
       <div>
-        <label className="mb-1 block font-bold">電話 *</label>
+        <label htmlFor="phone" className="mb-1 block font-bold">
+          電話 *
+        </label>
         <input
+          id="phone"
           type="tel"
           name="phone"
           required
@@ -138,8 +167,11 @@ export default function LeadForm() {
       </div>
 
       <div>
-        <label className="mb-1 block font-bold">居住地 *</label>
+        <label htmlFor="residence" className="mb-1 block font-bold">
+          居住地 *
+        </label>
         <select
+          id="residence"
           name="residence"
           required
           defaultValue=""
@@ -155,8 +187,11 @@ export default function LeadForm() {
       </div>
 
       <div>
-        <label className="mb-1 block font-bold">職業 *</label>
+        <label htmlFor="occupation" className="mb-1 block font-bold">
+          職業 *
+        </label>
         <select
+          id="occupation"
           name="occupation"
           required
           defaultValue=""
@@ -177,8 +212,11 @@ export default function LeadForm() {
       </div>
 
       <div>
-        <label className="mb-1 block font-bold">月收入 *</label>
+        <label htmlFor="income" className="mb-1 block font-bold">
+          月收入 *
+        </label>
         <select
+          id="income"
           name="income"
           required
           defaultValue=""
@@ -196,8 +234,11 @@ export default function LeadForm() {
       </div>
 
       <div>
-        <label className="mb-1 block font-bold">需求金額 *</label>
+        <label htmlFor="amount" className="mb-1 block font-bold">
+          需求金額 *
+        </label>
         <select
+          id="amount"
           name="amount"
           required
           defaultValue=""
@@ -213,8 +254,10 @@ export default function LeadForm() {
         </select>
       </div>
 
-      <div className="md:col-span-2">
-        <label className="mb-2 block font-bold">名下是否已有貸款 *</label>
+      <fieldset className="md:col-span-2">
+        <legend className="mb-2 block font-bold">
+          名下是否已有貸款 *
+        </legend>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 p-3">
@@ -239,16 +282,17 @@ export default function LeadForm() {
             有
           </label>
         </div>
-      </div>
+      </fieldset>
 
       {hasLoan === "有" && (
         <div className="grid gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 md:col-span-2 md:grid-cols-2">
           <div>
-            <label className="mb-1 block font-bold">
+            <label htmlFor="monthlyPayment" className="mb-1 block font-bold">
               目前每月貸款繳款金額 *
             </label>
 
             <select
+              id="monthlyPayment"
               name="monthlyPayment"
               required
               defaultValue=""
@@ -266,11 +310,12 @@ export default function LeadForm() {
           </div>
 
           <div>
-            <label className="mb-1 block font-bold">
+            <label htmlFor="paymentStatus" className="mb-1 block font-bold">
               目前是否有呆帳或遲繳 *
             </label>
 
             <select
+              id="paymentStatus"
               name="paymentStatus"
               required
               defaultValue=""
@@ -289,9 +334,12 @@ export default function LeadForm() {
       )}
 
       <div className="md:col-span-2">
-        <label className="mb-1 block font-bold">資金用途 *</label>
+        <label htmlFor="purpose" className="mb-1 block font-bold">
+          資金用途 *
+        </label>
 
         <select
+          id="purpose"
           name="purpose"
           required
           defaultValue=""
@@ -309,8 +357,9 @@ export default function LeadForm() {
         </select>
       </div>
 
-      <label className="flex items-start gap-2 text-sm text-slate-600 md:col-span-2">
+      <div className="flex items-start gap-2 text-sm text-slate-600 md:col-span-2">
         <input
+          id="consent"
           type="checkbox"
           name="consent"
           value="同意"
@@ -319,9 +368,20 @@ export default function LeadForm() {
         />
 
         <span>
-          我已閱讀服務說明及隱私權政策，並同意為回覆本次諮詢而使用我提供的資料。
+          <label htmlFor="consent">我已閱讀服務說明及</label>
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-blue-700 underline hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            隱私權政策
+          </a>
+          <label htmlFor="consent">
+            ，並同意為回覆本次諮詢而使用我提供的資料。
+          </label>
         </span>
-      </label>
+      </div>
 
       <button
         type="submit"
@@ -332,7 +392,12 @@ export default function LeadForm() {
       </button>
 
       {errorMessage && (
-        <p className="text-center text-sm font-medium text-red-600 md:col-span-2">
+        <p
+          id="form-error"
+          role="alert"
+          aria-live="assertive"
+          className="text-center text-sm font-medium leading-6 text-red-600 md:col-span-2"
+        >
           {errorMessage}
         </p>
       )}

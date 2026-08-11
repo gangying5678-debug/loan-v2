@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# loan-v2
 
-## Getting Started
+新時代諮詢表單網站，使用 Next.js App Router 建置。表單先送至同源的 `/api/lead`，再由伺服器端轉送至 Google Apps Script Web App，瀏覽器不會取得 Webhook URL。
 
-First, run the development server:
+## 本機開發
+
+```bash
+npm install
+```
+
+在專案根目錄建立 `.env.local`，至少設定：
+
+```bash
+GOOGLE_SHEETS_WEBHOOK_URL=your_google_apps_script_web_app_url
+```
+
+啟動專案：
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+開啟 [http://localhost:3000](http://localhost:3000)。請勿將 `.env.local`或實際 Webhook URL、Token 等敏感值提交到 Git。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 環境變數
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| 名稱 | 必要性 | 用途 |
+| --- | --- | --- |
+| `GOOGLE_SHEETS_WEBHOOK_URL` | 必要 | 伺服器端呼叫的 Google Apps Script Web App URL，不可加上 `NEXT_PUBLIC_` |
+| `NEXT_PUBLIC_META_PIXEL_ID` | 選用 | Meta Pixel ID，用於 PageView 與 Lead 事件 |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | 選用 | GA4 Measurement ID，用於 `generate_lead` 事件 |
+| `NEXT_PUBLIC_GA4_ID` | 選用 | GA4 Measurement ID 的相容備用名稱 |
+| `NEXT_PUBLIC_LINE_URL` | 選用 | 表單成功後由 API 回傳的 LINE 連結，未設定時使用預設值 |
 
-## Learn More
+## Google Sheets Webhook
 
-To learn more about Next.js, take a look at the following resources:
+`/api/lead` 會先執行伺服器端驗證，通過後才將以下 11 個 JSON 欄位 POST 至 `GOOGLE_SHEETS_WEBHOOK_URL`：
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+name
+phone
+residence
+occupation
+income
+amount
+hasLoan
+monthlyPayment
+loanStatus
+purpose
+consent
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Webhook 回傳非 2xx、網路失敗或逾時時，API 會回傳失敗，前端不會顯示成功或觸發 Lead 轉換事件。
 
-## Deploy on Vercel
+## 檢查與建置
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx eslint .
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```
